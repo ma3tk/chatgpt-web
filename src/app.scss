@@ -49,6 +49,29 @@ a.is-disabled {
   display: inline !important;
   text-decoration: none !important;
 }
+.copy {
+  text-align: right;
+  display: inline-block;
+  padding: 10px;
+  position: absolute;
+  background-color: white;
+  animation: copy-animation .5s ease;
+  cursor: pointer;
+}
+@keyframes copy-animation {
+  0%{
+    opacity: 0;
+  }
+  100%{
+    opacity: 1;
+  }
+}
+
+/* コピーボタン */
+.message-body:hover .copy {
+  display: block !important;
+  text-decoration: none !important;
+}
 
 /* Style the chat input */
 .chat-input {
