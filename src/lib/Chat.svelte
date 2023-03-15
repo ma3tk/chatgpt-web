@@ -1,4 +1,6 @@
+
 <script lang="ts">
+  import loading from "../assets/three-dots-black.svg";
   //import { fetchEventSource } from "@microsoft/fetch-event-source";
 
   import { apiKeyStorage, chatsStorage, addMessage, clearMessages } from "./Storage.svelte";
@@ -98,7 +100,7 @@
   });
 
   // Marked options
-  const markedownOptions = {
+  const markdownOptions = {
     gfm: true, // Use GitHub Flavored Markdown
     breaks: true, // Enable line breaks in markdown
     mangle: false, // Do not mangle email addresses
@@ -203,10 +205,33 @@
     }
   };
 
+  const setSystemRole = async (): Promise<void> => {
+    const systemRoleMessage: Message = {
+      role: "system",
+      content: chat.role
+    };
+    addMessage(chatId, systemRoleMessage);
+
+    const response = await sendRequest(chat.messages);
+
+    if (response.error) {
+      addMessage(chatId, {
+        role: "error",
+        content: `Error: ${response.error.message}`,
+      });
+    } else {
+      response.choices.map((choice) => {
+        choice.message.usage = response.usage;
+        addMessage(chatId, choice.message);
+        chatsStorage.set($chatsStorage);
+      });
+    }
+  };
+
   const suggestName = async (): Promise<void> => {
     const suggestMessage: Message = {
       role: "user",
-      content: "Can you give me a 5 word summary of this conversation's topic?",
+      content: "20字以下でこの会話のタイトルを付けてもらえますか？",
     };
     addMessage(chatId, suggestMessage);
 
@@ -258,6 +283,17 @@
       recognition?.start();
     }
   };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text).then(
+      () => {
+        // コピーに成功したときの処理
+        alert("クリップボードにコピーしました");
+      },
+      () => {
+        // コピーに失敗したときの処理
+      });
+  }
 </script>
 
 <nav class="level chat-header">
@@ -270,7 +306,7 @@
           class="greyscale ml-2 is-hidden has-text-weight-bold editbutton"
           title="Rename chat"
           on:click|preventDefault={() => {
-            let newChatName = prompt("Enter a new name for this chat", chat.name);
+            let newChatName = prompt("チャット名を入れてね", chat.name);
             if (newChatName) {
               chat.name = newChatName;
               chatsStorage.set($chatsStorage);
@@ -282,10 +318,25 @@
         <a
           href={"#"}
           class="greyscale ml-2 is-hidden has-text-weight-bold editbutton"
-          title="Suggest a chat name"
+          title="チャットネームサジェスト"
           on:click|preventDefault={suggestName}
         >
           💡
+        </a>
+        <a
+          href={"#"}
+          class="greyscale ml-2 is-hidden has-text-weight-bold editbutton"
+          title="チャットの人格設定"
+          on:click|preventDefault={() => {
+            let newRole = prompt("人格を入れてね", chat.role);
+            if (newRole) {
+              chat.role = newRole;
+              chatsStorage.set($chatsStorage);
+            }
+            setSystemRole();
+          }}
+        >
+          👾
         </a>
         <a
           href={"#"}
@@ -304,8 +355,10 @@
       <button
         class="button is-warning"
         on:click={() => {
-          clearMessages(chatId);
-        }}><span class="greyscale mr-2">🗑️</span> Clear messages</button
+          if (confirm("本当にメッセージをリセットしてもよろしいですか？")) {
+            clearMessages(chatId);
+          }
+        }}><span class="greyscale mr-2">🗑️</span> メッセージのリセット</button
       >
     </p>
   </div>
@@ -318,6 +371,11 @@
       class:has-text-right={message.content.split("\n").filter((line) => line.trim()).length === 1}
     >
       <div class="message-body content">
+        <span
+          class="copy is-hidden"
+          on:click={() => {
+            copyToClipboard(message.content);
+          }}>Copy</span>
         <a
           href={"#"}
           class="greyscale is-pulled-right ml-2 is-hidden editbutton"
@@ -330,7 +388,7 @@
         </a>
         <SvelteMarkdown
           source={message.content}
-          options={markedownOptions}
+          options={markdownOptions}
           renderers={{
             code: Code,
           }}
@@ -338,11 +396,16 @@
       </div>
     </article>
   {:else if message.role === "system" || message.role === "error"}
-    <article class="message is-danger">
+    <article class="message is-danger assistant-message">
       <div class="message-body content">
+        <span
+          class="copy is-hidden"
+          on:click={() => {
+            copyToClipboard(message.content);
+          }}>Copy</span>
         <SvelteMarkdown
           source={message.content}
-          options={markedownOptions}
+          options={markdownOptions}
           renderers={{
             code: Code,
           }}
@@ -350,40 +413,40 @@
       </div>
     </article>
   {:else}
-    <article class="message is-success">
+    <article class="message is-success assistant-message">
       <div class="message-body content">
+        <span
+          class="copy is-hidden"
+          on:click={() => {
+            copyToClipboard(message.content);
+          }}>Copy</span>
         <SvelteMarkdown
           source={message.content}
-          options={markedownOptions}
+          options={markdownOptions}
           renderers={{
             code: Code,
           }}
         />
-        {#if message.usage}
-          <p class="is-size-7">
-            This message was generated using <span class="has-text-weight-bold">{message.usage.total_tokens}</span>
-            tokens ~=
-            <span class="has-text-weight-bold">${(message.usage.total_tokens * token_price).toFixed(6)}</span>
-          </p>
-        {/if}
       </div>
     </article>
   {/if}
 {/each}
 
 {#if updating}
-  <progress class="progress is-small is-dark" max="100" />
+  <div class="content">
+    <img src={loading} alt="Loading" width="28" height="28" />
+  </div>
 {/if}
 
 <form class="field has-addons has-addons-right" on:submit|preventDefault={() => submitForm()}>
   <p class="control is-expanded">
     <textarea
       class="input is-info is-focused chat-input"
-      placeholder="Type your message here..."
+      placeholder="例: プログラムを読んで解説してください"
       rows="1"
       on:keydown={(e) => {
         // Only send if Enter is pressed, not Shift+Enter
-        if (e.key === "Enter" && !e.shiftKey) {
+        if (!e.isComposing && e.key === "Enter" && !e.shiftKey) {
           submitForm();
           e.preventDefault();
         }
@@ -402,10 +465,10 @@
     >
   </p>
   <p class="control">
-    <button class="button" on:click|preventDefault={showSettings}><span class="greyscale">⚙️</span></button>
+    <button class="button" on:click|preventDefault={showSettings} title="設定"><span class="greyscale">⚙️</span></button>
   </p>
   <p class="control">
-    <button class="button is-info" type="submit">Send</button>
+    <button class="button is-info" type="submit" title="送信">✈</button>
   </p>
 </form>
 
@@ -413,6 +476,9 @@
   on:keydown={(event) => {
     if (event.key === "Escape") {
       closeSettings();
+    } else if (event.keyCode === 82) {
+    // control + r
+      event.preventDefault = recordToggle();
     }
   }}
 />
