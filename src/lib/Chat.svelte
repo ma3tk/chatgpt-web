@@ -476,7 +476,7 @@
   on:keydown={(event) => {
     if (event.key === "Escape") {
       closeSettings();
-    } else if (event.keyCode === 82) {
+    } else if (event.ctrlKey && event.keyCode === 82) {
     // control + r
       event.preventDefault = recordToggle();
     }
